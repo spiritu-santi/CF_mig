@@ -233,6 +233,12 @@ granger_mult <- function(x.1,x.2=NULL,x.3=NULL,x.4=NULL,x.5=NULL,x.6=NULL,x.7=NU
   return(FIAR::partGranger(m, nx=n_x, ny=1, order=lag.order,perm=F) %>% as_tibble(.rows = 1))
 }
 freq_PF <- function(x) {sum(x %in% c(7:8),na.rm=T)/length(x[!is.na(x)])}
+substrRight <- function(x, n){
+  substr(x, nchar(x)-n+1, nchar(x))
+}
+substrLeft <- function(x, z, n) {
+  substr(x, z,nchar(x)-n)
+}
 
 window = 10 ## size of moving window to estimate the rolling mean 
 min_by_year = 10 ## minimum number of occurrences to consider a valid data point
@@ -696,6 +702,58 @@ pp <- out_plot %>% #mutate(Series=fct_relevel(Series,"gci_all","gci_luc","gci_pr
 ggsave(filename = here(output),plot = pp)
 }
 
+plot_granger_alternative <- function(data="output_data/GrangerFinal_Min.Rdata",output="plots/Granger_Mid_Alternative.pdf",TRY="output_data/growth_try.Rdata",  data_lul="output_data/Historical_dataLULC.R") {
+  load(here(data))
+  load(here(data_lul))
+  load(here(TRY))
+  load(here("output_data/alt_species.Rdata"))
+  lucs_tib %>% distinct(Resolved_ACCEPTED) -> species_list
+  growth_try %>% filter(Resolved_ACCEPTED %in% all_of(species_list$Resolved_ACCEPTED)) %>% group_by(Resolved_ACCEPTED) %>% nest() -> target_try
+  target_try %>% rowwise() %>% mutate(LifeForm=(Mode(data$OrigValueStr))) -> target_try
+  left_join(species_list,target_try,"Resolved_ACCEPTED") %>% select(-data) %>% mutate(LifeForm=replace_na(LifeForm,"Unknown")) %>% mutate(LifeForm=factor(LifeForm)) -> species_list
+  final %>% unnest(gci_luc) %>% select(orig,prob) %>% rename_with(~c("Resolved_ACCEPTED","gci_luc","prob_luc")) %>% inner_join(.,{final %>% unnest(gci_temps) %>% select(orig,prob) %>% rename_with(~c("Resolved_ACCEPTED","gci_temps","prob_temps"))},by="Resolved_ACCEPTED") %>% 
+    inner_join(.,{final %>% unnest(gci_precs) %>% select(orig,prob) %>% rename_with(~c("Resolved_ACCEPTED","gci_precs","prob_precs"))},by="Resolved_ACCEPTED") %>% 
+    inner_join(.,{final %>% unnest(gci_climate) %>% select(orig,prob) %>% rename_with(~c("Resolved_ACCEPTED","gci_climate","prob_climate"))},by="Resolved_ACCEPTED") %>% 
+    inner_join(.,{final %>% unnest(pgci_climate) %>% select(orig,prob) %>% rename_with(~c("Resolved_ACCEPTED","pgci_climate","prob_p_climate"))},by="Resolved_ACCEPTED") %>% 
+    inner_join(.,{final %>% unnest(gci_all) %>% select(orig,prob) %>% rename_with(~c("Resolved_ACCEPTED","gci_all","prob_all"))},by="Resolved_ACCEPTED") %>% 
+    inner_join(.,species_list,by="Resolved_ACCEPTED") %>% inner_join(.,alt_species,by="Resolved_ACCEPTED") %>% ungroup() %>% pivot_longer(cols = contains("gci"),names_to = "Series",values_to = "gci") %>% mutate(AltCat=fct_relevel(AltCat,"Low","Mid Low","Mid High","High")) %>% pivot_wider(names_from = "Series",values_from = "gci") %>% mutate(gci_luc = case_when(prob_luc > 0.05 ~ as.numeric(NA),prob_luc <= 0.05 ~ gci_luc),
+                                                                                                                                                                                                                                                                                                                                                       gci_temps = case_when(prob_temps > 0.05 ~ as.numeric(NA),prob_temps <= 0.05 ~ gci_temps),
+                                                                                                                                                                                                                                                                                                                                                       gci_precs = case_when(prob_precs > 0.05 ~ as.numeric(NA),prob_precs <= 0.05 ~ gci_precs),
+                                                                                                                                                                                                                                                                                                                                                       gci_climate = case_when(prob_climate > 0.05 ~ as.numeric(NA),prob_climate <= 0.05 ~ gci_climate),
+                                                                                                                                                                                                                                                                                                                                                       pgci_climate = case_when(prob_p_climate > 0.05 ~ as.numeric(NA),prob_p_climate <= 0.05 ~ pgci_climate),
+                                                                                                                                                                                                                                                                                                                                                       gci_all = case_when(prob_all > 0.05 ~ as.numeric(NA),prob_all <= 0.05 ~ gci_all)
+    ) %>% pivot_longer(contains("gci"),names_to = "Series",values_to = "gci") -> out_plot
+  counts <- out_plot %>% filter(!is.na(gci)) %>% count(Series)
+  meanas <- out_plot %>% filter(!is.na(gci)) %>% group_by(Series) %>% summarise(n=median(gci))
+  names_series <- meanas %>% mutate(Names=str_to_sentence(sub("gci_","",Series)))
+  names_series$Names[6] <- "Climate|LUC"
+  names_series$Names[3] <- "LUC"
+  pp <- out_plot %>% filter(!is.na(gci)) %>% 
+    ggplot(aes(x = Series, y = gci,fill=Series)) + 
+    ggdist::stat_halfeye(
+      adjust = .9, 
+      width = .6, 
+      .width = 0, 
+      alpha=0.7,
+      slab_colour = "black",
+      slab_size = .2,
+      justification = -.4, 
+      height = 2) + 
+    geom_boxplot(width = .4, outlier.shape = NA,size=.2,fatten = 7,alpha=0.7) +
+    geom_point(fill="grey50",size = 2,alpha = .4,shape = 21,stroke = 0.2,position = position_jitter(seed = 1, width = .2)) + 
+    coord_flip() +
+    scale_fill_viridis_d(option="G",begin=0.4,name="Series",labels=names_series)  + 
+    scale_y_log10() + theme(panel.background = element_blank(),panel.grid = element_blank(),axis.line = element_line(),legend.position = "",axis.text.x = element_text(size = 10),legend.text = element_text()) + annotate(
+      geom = "text", x = (1:6)+.2, y = 15, 
+      label = paste0("n = ",counts$n), hjust = 0, vjust = -.8, size = 2,fontface = "bold",
+    ) + annotate(
+      geom = "text", x = (1:6)+.2, y = meanas$n, fontface = "bold",
+      label = round(meanas$n,2), hjust = .5, vjust = -.8, size = 3
+    ) + scale_x_discrete(labels= names_series$Names) + labs(x="",y="Granger Causality Index") +
+    NULL
+  ggsave(filename = here(output),plot = pp)
+}
+
 lmm_fit <- function(data="output_data/Splines_v.4.Rdata",cual="Min",flex_point = 13,out_table="output_data/LMM_modelsMin.Rdata"){
 load(here(data))
 mean_alts %>% mutate(Type="OBS",.before=data) %>% rowwise(Resolved_ACCEPTED) %>% select(Resolved_ACCEPTED,Type,data) %>% unnest(cols = c(data)) %>% mutate(Quarter=case_when(YearCat < 1921 ~ "1",YearCat < 1926 & YearCat >= 1921 ~ "2",
@@ -722,7 +780,7 @@ models <- list(fit0,fit1,fit2,fit3)
 save(models,file = here(out_table))
 }
 
- plot_LMM <- function(data="output_data/LMM_modelsMin.Rdata",cual="Min",outplot="plots/LMM_modelsMin.pdf",outtable="tables/LMM_modelsMin.docx"){
+plot_LMM <- function(data="output_data/LMM_modelsMin.Rdata",cual="Min",outplot="plots/LMM_modelsMin.pdf",outtable="tables/LMM_modelsMin.docx"){
   load(here(data))
   print(anova(models[[1]],models[[2]],models[[3]],models[[4]]))
 as.numeric(readline("Select model")) -> quien
@@ -753,13 +811,26 @@ ggsave(filename = here(outplot),plot = pp)
 }
 
 #### PLOTS: STAND ALONE PLOTS, WHICH MAKES IT A BIT SLOW
-plot_SppSeries <- function(data="output_data/Species_summaryRaw.RData",inflect_point = 1976,output="plots/Species_Series.trim.pdf",trim=T){ 
+plot_SppSeries <- function(data="output_data/Species_summaryRaw.RData",inflect_point = 1976,output="plots/Species_Series.TRY.pdf",trim=F, by_group=T){ 
 load(here(data))
   plotas <- list()
   if (trim==T) {names(species_means) %>% grepl("trim",.) -> cuales} 
   if (trim==F) {names(species_means) %>% grepl("trim",.) %>% !. -> cuales}
   quien <- which(cuales)
-  for (k in 1:length(quien)){
+  if(by_group) {
+    for (k in 1:length(quien)){
+      cat("Plotting",k,"\r")
+      pp <- species_means[quien][[k]] %>% group_by(Resolved_ACCEPTED) %>% nest() %>% ungroup() %>% mutate(data = dif_clim(data,index = 4:5,flex_pt = inflect_point)) %>% unnest(data) %>% inner_join(.,species_means[quien][[k]] %>% select(Resolved_ACCEPTED,LifeForm),by="Resolved_ACCEPTED") %>% group_by(YearCat,LifeForm) %>% #mutate(SES_sig = SES >= 1.96 | SES <= -1.96) %>% filter(SES_sig) %>% 
+        summarise(Observed=median(Observed,na.rm=T),SES=median(SES,na.rm=T)) %>% 
+        ggplot(aes(x=as.numeric(YearCat), y=Observed, fill= SES)) +
+        geom_bar(stat = "identity") + 
+        labs(title = names(species_means)[quien][k],y="Meters",x="") + theme(panel.background = element_blank(),axis.line = element_line()) +
+        scale_fill_viridis_b(n.breaks=10,option="G",na.value = "white",direction=-1,limits=c(-2,2)) + geom_vline(linetype="dashed",xintercept = inflect_point) + facet_wrap(~LifeForm)
+      NULL
+      output2 <- output %>% sub(".pdf","",.) %>% paste0(.,"_",k,".pdf")
+ggsave(filename = here(output2),plot = pp)
+    }}
+  if(!by_group) { for (k in 1:length(quien)){
     cat("Plotting",k,"\r")
 plotas[[k]] <- species_means[quien][[k]] %>% group_by(Resolved_ACCEPTED) %>% nest() %>% ungroup() %>% mutate(data = dif_clim(data,index = 4:5,flex_pt = inflect_point)) %>% unnest(data) %>% group_by(YearCat) %>% #mutate(SES_sig = SES >= 1.96 | SES <= -1.96) %>% filter(SES_sig) %>% 
   summarise(Observed=median(Observed,na.rm=T),SES=median(SES,na.rm=T)) %>% 
@@ -770,9 +841,6 @@ plotas[[k]] <- species_means[quien][[k]] %>% group_by(Resolved_ACCEPTED) %>% nes
   NULL
   }
 ####
-
-plotas[[3]]
-  
 myplots <- "
 AABB
 CCDD
@@ -785,6 +853,8 @@ pp <- wrap_plots(plotas[-4])  +
 
 ggsave(filename = here(output),plot = pp)
 }
+}
+
 plot_raw_clim <- function (data="output_data/Historical_dataClimate_full.R",prec=F,variables="Min_tmin"){load(here(data))
   reduct_five %>% filter(decimallatitude > lat_limits[1] & decimallongitude < lon_limits[1],
                          !(decimallatitude > lat_limits[2] | decimallongitude < lon_limits[2]),
@@ -879,11 +949,12 @@ pp <- precs %>% mutate(Elevation=cut(AltRas,breaks=alt_breaks,labels=cat),.befor
   mutate(Category=paste(LandUse,Elevation,sep="_")) %>% 
   ggplot(aes(x=Year, y=Freq, fill=LandUse)) + 
   geom_area() + scale_fill_viridis_d(option="G",direction=-1,begin = 0.1,end=0.7) +
-  theme(legend.position = "bottom",panel.background = element_blank(),panel.grid = element_blank(),axis.ticks = element_blank(),axis.text.x = element_text(size=10),axis.line = element_line()) + labs(y="Frequency",title="Land use in cloud forests through time") +
+  theme(legend.position = "bottom",panel.background = element_blank(),panel.grid = element_blank(),axis.ticks = element_blank(),axis.text.x = element_text(size=10),axis.line = element_line()) + labs(y="Frequency",title="Land use in cloud forests through time") + geom_vline(xintercept = 1976) +
   facet_wrap(~ Category,strip.position = "top") +
   NULL
 ggsave(filename = here("plots/LUL_TimeSeries.pdf"),plot = pp)
 }
+
 plot_map <- function(data="Historical_dataClimate_full.R",output_name="RichnessMap.pdf",palette = "Greens",title="Species richness") {
   load(here(paste("output_data/",data,sep="")))
 pp <- reduct_five %>% filter(decimallatitude > 12.5 & decimallongitude < -77,
@@ -976,3 +1047,95 @@ ggplot(aes(x = orig, y = LifeForm, fill = ..x..)) +
   scale_x_log10() +
  NULL
 }
+
+
+plot_range <- function(data_lul="output_data/Historical_dataLULC.R",data_spp="output_data/Species_summaryRaw.RData",data_lmm_min="output_data/LMM_modelsMin.Rdata",data_lmm_mid="output_data/LMM_modelsMin.Rdata",data_lmm_max="output_data/LMM_modelsMin.Rdata",which=4,output="plots/Range_Series.pdf"){ 
+load(here(data_lul))
+load(here(data_spp))
+load(here(data_lmm_min))
+models[[which]] -> uno
+tibble(PRED=predict(uno),Resolved_ACCEPTED=uno@frame$Resolved_ACCEPTED,OBS=uno@frame$Alt,wave1=uno@frame$wave1,wave01=uno@frame$wave01) %>% mutate(Time=wave1+wave01,Range="lower") -> model_frame
+data_lmm_mid="output_data/LMM_modelsMid.Rdata"
+load(here(data_lmm_mid))
+models[[4]] -> uno
+tibble(PRED=predict(uno),Resolved_ACCEPTED=uno@frame$Resolved_ACCEPTED,OBS=uno@frame$Alt,wave1=uno@frame$wave1,wave01=uno@frame$wave01) %>% mutate(Time=wave1+wave01,Range="mid") %>% bind_rows(.,model_frame) -> model_frame
+data_lmm_max="output_data/LMM_modelsMax.Rdata"
+load(here(data_lmm_max))
+models[[4]] -> uno
+
+tibble(PRED=predict(uno),Resolved_ACCEPTED=uno@frame$Resolved_ACCEPTED,OBS=uno@frame$Alt,wave1=uno@frame$wave1,wave01=uno@frame$wave01) %>% mutate(Time=wave1+wave01,Range="upper") %>% bind_rows(.,model_frame) -> model_frame
+
+model_frame %>% pivot_wider(names_from = Range, values_from = OBS) %>% group_by(Resolved_ACCEPTED,Time) %>% summarise(across(4:6,mean,na.rm=T)) %>% mutate(Range=abs(lower-upper)) %>% pivot_wider(names_from = Time,values_from = c(upper,mid,lower,Range)) %>% select(starts_with("Range")) %>% rowwise() %>% relocate(c(19,21,16,17),.before=2) %>% relocate(c(20,21),.before=8) %>% mutate(Baseline = mean(c_across(1:13),na.rm=T)) %>% relocate(Baseline,.before=2) %>% mutate(across(2:21, ~ .x - Baseline)) %>% pivot_longer(3:22,names_to = "Time",values_to = "Range") %>% mutate(Time=as.numeric(sub("Range_","",Time))) %>% group_by(Time) %>% summarise(N=median(Range,na.rm=T)) -> ns
+pp <- model_frame %>% pivot_wider(names_from = Range, values_from = OBS) %>% group_by(Resolved_ACCEPTED,Time) %>% summarise(across(4:6,mean,na.rm=T)) %>% mutate(Range=abs(lower-upper)) %>% pivot_wider(names_from = Time,values_from = c(upper,mid,lower,Range)) %>% select(starts_with("Range")) %>% rowwise() %>% relocate(c(19,21,16,17),.before=2) %>% relocate(c(20,21),.before=8) %>% mutate(Baseline = mean(c_across(1:13),na.rm=T)) %>% relocate(Baseline,.before=2) %>% mutate(across(2:21, ~ .x - Baseline)) %>% pivot_longer(3:22,names_to = "Time",values_to = "Range") %>% mutate(Time=as.numeric(sub("Range_","",Time))) %>% filter(!is.na(Range))  %>%
+  ggplot(aes(x=Time,y=Range)) +
+  geom_hline(yintercept = 0,alpha=0.7) + 
+  geom_jitter(alpha=0.4,size=0.8,width=0.2,shape=21,aes(fill=Time)) + 
+  #ggdist::stat_halfeye(aes(fill=Time), adjust = .9, width = .6, .width = 0, alpha=0.7,slab_colour = "black", slab_size = .2,justification = -.4, height = 2) +
+  stat_summary(aes(color=Time),fun = "median",size=1,geom = "crossbar",width=0.7,position = position_nudge(x=-.01),alpha=0.8) +
+  stat_summary(aes(color=Time),fun = function(z) { quantile(z,0.10) }, geom = "crossbar",width=0.7,position = position_nudge(x=-.01),alpha=0.8) +
+  stat_summary(aes(color=Time),fun = function(z) { quantile(z,0.90) }, geom = "crossbar",width=0.7,position = position_nudge(x=-.01),alpha=0.8) +
+  scale_color_viridis_b(n.breaks=50,option="G",direction=1,end=.8) + 
+  scale_fill_viridis_b(n.breaks=50,option="G",direction=1,end=.8)+ 
+  theme(legend.position = "",panel.background = element_rect(fill="NA",color="black"),panel.grid = element_blank()) + 
+  labs(x="Time",y="Deviation in range size") +
+  geom_vline(xintercept = 13.5,linetype="dashed") + 
+   annotate(geom = "text", x = ns$Time, y = ns$N, fontface = "bold",label = paste0(round(ns$N,1)), hjust = .5, size = 4,vjust=10) +
+  NULL
+pp
+pp <- wrap_plots(list(pp)) +
+  plot_layout(guides = "keep",tag_level = 'new') + 
+  plot_annotation(title = "Historical altitudinal range for cloud forests",
+                  subtitle="Deviations from baseline estimates", 
+                  caption= "Ramírez-Barahona et al.") & theme(legend.position = '')
+ggsave(filename = here(output),plot = pp)
+}
+
+
+
+trends <- coef(uno)$Resolved_ACCEPTED %>% as_tibble()
+trends <- trends %>% mutate(Resolved_ACCEPTED=coef(uno)$Resolved_ACCEPTED %>% rownames())
+lucs_tib %>% filter(decimallatitude > 12.5 & decimallongitude < -77,
+       !(decimallatitude > 26 | decimallongitude < -109),
+       !(decimallatitude > 17 & decimallongitude > -86),
+       !CellID%in%all_of(non_id),AltRas<alt_limit) %>% distinct(CellID,Resolved_ACCEPTED,.keep_all = T) %>% select(CellID,Resolved_ACCEPTED,x,y,AltRas) %>% left_join(.,trends,by="Resolved_ACCEPTED") -> trends
+trends %>% distinct(Resolved_ACCEPTED)
+trends %>% pull(AltRas) %>% cut(.,breaks=seq(0,alt_limit,belts),labels=seq(0,alt_limit,belts)[-1], include.lowest=T) -> alt_cats ### aggregate records into altitudinal belts
+trends <- trends %>% ungroup() %>% mutate(AltCats = alt_cats)
+species_means$SlopeMin %>% distinct(Resolved_ACCEPTED) %>% pull() -> names
+trends %>% filter(!is.na(wave01)) %>% #filter(Resolved_ACCEPTED %in% all_of(names)) %>% 
+  distinct(Resolved_ACCEPTED)
+trends %>% filter(!is.na(wave01)) %>% #filter(Resolved_ACCEPTED %in% all_of(names)) %>% 
+  group_by(CellID) %>% summarise(across(5:7, mean),across(2:4,first)) -> to_plot
+range(c(to_plot$wave01,to_plot$wave1),na.rm=T) -> limits_vals
+p <- to_plot %>% ggplot() + geom_sf(data=ne_countries(scale=110,returnclass = "sf",type="countries"),colour="grey95",fill="grey95",size=0.5) + xlim(xlimits) + ylim(ylimits) + 
+geom_tile(aes(x=x,y=y,fill=wave01),color="black",size=0.05) + 
+  scale_fill_viridis_b(n.breaks=20,limits=limits_vals,name="Slope") + 
+  #scale_fill_gradient2(limits=limits_vals,name="Slope") +
+  theme(panel.background = element_rect(fill="NA",colour = "black"),panel.grid=element_blank(),axis.title = element_blank(),axis.text = element_blank(),axis.ticks = element_blank())
+pp <- to_plot %>% ggplot() + geom_sf(data=ne_countries(scale=110,returnclass = "sf",type="countries"),colour="grey95",fill="grey95",size=0.5) + xlim(xlimits) + ylim(ylimits) + 
+geom_tile(aes(x=x,y=y,fill=wave1),color="black",size=0.05) + 
+  scale_fill_viridis_b(n.breaks=20,limits=limits_vals,name="Slope") + 
+  #scale_fill_gradient2(limits=limits_vals,name="Slope") +
+  theme(panel.background = element_rect(fill="NA",colour = "black"),panel.grid=element_blank(),axis.title = element_blank(),axis.text = element_blank(),axis.ticks = element_blank())
+wrap_plots(list(p,pp)) +
+  plot_layout(byrow=T,nrow = 2,ncol=1,guides = "collect",tag_level = 'new') + 
+  plot_annotation(title = "Per-cell mean species' trends", subtitle="Breaking point 1975-1976", caption= "Ramírez-Barahona et al.") & theme(legend.position = 'bottom')
+
+
+
+
+taget_spp = "Cyathea_divergens"
+lucs_tib %>% filter(Resolved_ACCEPTED==taget_spp) -> test
+test %>% distinct(CellID,.keep_all = T) %>%  select(CellID,x,y,YearCat,contains("tmean")) %>% pivot_longer(cols = -c(1:4),names_to = "Variable",values_to = "Values") %>% mutate(Year = as.numeric(substrRight(Variable,4))) %>% mutate(Match= YearCat==Year) %>% filter(Match) %>% mutate(Variable = (substrLeft(Variable,1,5))) %>% pivot_wider(names_from = "Variable",values_from = "Values") -> test
+lucs_tib %>% filter(Resolved_ACCEPTED==taget_spp) %>% distinct(CellID,.keep_all = T) %>% select(CellID,contains("LUC")) %>% left_join(test,.,by="CellID") %>% filter(Ann_tmean!=max(Ann_tmean,na.rm=T),Ann_tmean!=min(Ann_tmean,na.rm=T),Seas_tmean!=max(Seas_tmean,na.rm=T),Seas_tmean!=min(Seas_tmean,na.rm=T)) -> test
+
+library(gganimate)
+aa <- test %>% mutate(across(contains("LUC"), ~ case_when(.x %in% c(7,8) ~ "Remaining",!.x %in% c(7,8) ~ "Lost"))) %>% pivot_longer(cols = -c(1:8),names_to = "Period",values_to = "Present") %>% mutate(Trans=as.integer(substrRight(Period,4))) %>% 
+ggplot(aes(x=Ann_tmean,y=Seas_tmean,fill=Present,color=Present)) + 
+geom_point(alpha=0.9,shape=21,size=3) + 
+#stat_ellipse(size=1.2) +
+#facet_wrap(~Period) + 
+theme(panel.background = element_blank(),panel.grid=element_blank(),axis.line = element_line()) + scale_fill_manual(values= c("tomato","black"),name="Forest Cover") + scale_color_manual(values= c("tomato","black"),name="Forest Cover") + labs(title="Deforestation and species occurrences - {frame_time}",subtitle=taget_spp,caption="Ramírez-Barahona et al.",x="Annual mean temperature",y="Temperature Seasonality") + transition_time(Trans)
+
+anim_save(aa,file="~/Desktop/Procrastination.gif",duration=30)
+
