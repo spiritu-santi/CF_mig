@@ -1,7 +1,7 @@
-# Cloud Forest Migrations
+# Retrieving cloud forest elevation shifts woth occurrence data
 Files needed to run the results from:
 
-Ramírez-Barahona S, Cuervo-Robayo AP, Feeley K, Ortiz-Rodríguez A, Vásquez-Aguilar AA, Ornelas JF, Rodríguez-Correa H. 2024. Upslope shifts of species in Mesoamerican montane cloud forests *Under review* 
+Ramírez-Barahona S *et al.*, 2024. Upslope shifts of species in Mesoamerican montane cloud forests. *Under review* 
 
 pre-print of a previous version is available at: https://www.researchsquare.com/article/rs-1036888/v1
 
