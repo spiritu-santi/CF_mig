@@ -1,3 +1,6 @@
-The first two datasets are Excel spreadsheets.  
-The third dataset is an RData file that contains a list.  
+Data S1–S2
+Word documents (docx) with embedded tables including the number of occurrence records per species (sheet 1) and per eco-region (sheet 2).
+
+Data S3
+R data file (Rdata) with a list of objects containing the TRY datasets used and the processed data for growth forms and dispersal syndromes.   
 -  This can be loaded into an R environment using the *load()* function, which would load an object named *try_list* contianing four elements.  
