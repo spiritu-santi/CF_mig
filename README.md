@@ -1,4 +1,4 @@
-# Retrieving cloud forest elevation shifts woth occurrence data
+# Retrieving cloud forest elevation shifts with occurrence data
 Files needed to run the results from:
 
 Ramírez-Barahona S *et al.*, 2024. Upslope shifts of species in Mesoamerican montane cloud forests. *Under review* 
