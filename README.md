@@ -3,7 +3,8 @@ Files needed to run the results from:
 
 Ramírez-Barahona S *et al.*, 2024. Upslope plant species shifts in Mesoamerican cloud forests driven by climate and land use change. *Under review* 
 
-- The GBIF raw occurrence dataset used to produce the final results can be directly accessed [here](https://github.com/user-attachments/assets/37b3af2f-8a47-41bb-b0a8-c6839106cc6f) and should be properly cited.
+- The GBIF raw occurrence dataset used to produce the final results can be directly accessed here (https://doi.org/10.15468/dl.544ewq)
+) and should be properly cited.
 
 - NOTE: we urge the user to dowload and cite the climate or land-use data from the original sources.  
 - NOTE: If using the processed data used here, we strongly advice to cite the original sources.
