@@ -3,13 +3,13 @@ Files needed to run the results from:
 
 Ramírez-Barahona S *et al.*, 2024. Upslope plant species shifts in Mesoamerican cloud forests driven by climate and land use change. *Under review* 
 
-- The GBIF raw occurrence dataset used to produce the final results can be directly accessed here (https://doi.org/10.15468/dl.544ewq) and should be properly cited.  The GBIF raw occurrence dataset is also available directly in the Zenodo repository.  The use of this dataset is licensed under CC BY-NC 4.0 (Attribution-NonCommercial).
-      - Prior to processing the data, we reduced file size by keeping only essential information using bash:
-            unzip 0188599-210914110416597.zip
-            awk -F"\t" '{print $6"\t"$7"\t"$8"\t"$9"\t"$10"\t"$11"\t"$13"\t"$22"\t"$23"\t"$33}' 0188599-210914110416597.csv > Traqueos_NeoTropics_COR.csv
-            wc -l TRAQUEOS_raw.csv
-            wc -l Traqueos_NeoTropics_COR.csv
-- Also available in the Zenodo repository is the processed occurrence dataset as an R-binary file: 'Historical_data_FULL_LUL.v.1.R'.       
+- The GBIF raw occurrence dataset used to produce the final results can be directly accessed here (https://doi.org/10.15468/dl.544ewq) and should be properly cited.  The GBIF raw occurrence dataset is also available directly in the Zenodo repository.  The use of this dataset is licensed under CC BY-NC 4.0 (Attribution-NonCommercial).  
+    - Prior to processing the data, we reduced file size by keeping only essential information using bash:  
+      - spiritusanti$ unzip 0188599-210914110416597.zip  
+      - spiritusanti$ awk -F"\t" '{print $6"\t"$7"\t"$8"\t"$9"\t"$10"\t"$11"\t"$13"\t"$22"\t"$23"\t"$33}' 0188599-210914110416597.csv > Traqueos_NeoTropics_COR.csv  
+      - spiritusanti$ wc -l TRAQUEOS_raw.csv  
+      - spiritusanti$ wc -l Traqueos_NeoTropics_COR.csv  
+    - Also available in the Zenodo repository is the processed occurrence dataset as an R-binary file: 'Historical_data_FULL_LUL.v.1.R'.  
 
 - NOTE: we urge the user to dowload and cite the climate or land-use data from the original sources.  
 - NOTE: If using the processed data used here, we strongly advice to cite the original sources.
